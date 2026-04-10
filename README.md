@@ -1,192 +1,93 @@
-# MWS GPT Platform
+# template
 
-Self-hosted AI chat platform with multi-provider routing, long-term memory, voice, and monitoring.
+Template for task: Репозиторий для работы
 
-Built on [OpenWebUI](https://github.com/open-webui/open-webui) (prebuilt image) with [LiteLLM](https://github.com/BerriAI/litellm) as the AI gateway, a custom Memory Service for persistent user memory, and a full observability stack.
+## Getting started
 
-## Features
+To make it easy for you to get started with GitLab, here's a list of recommended next steps.
 
-- **Multi-model chat** -- Anthropic Claude, OpenAI GPT-4o/o3, Qwen, NVIDIA Nemotron, and more via a single interface
-- **Smart routing** -- `mws/auto` analyzes query complexity and picks the right model (Sonnet for simple, Opus for complex)
-- **Fallback chains** -- if a provider is down or out of budget, requests fall back to alternative models automatically
-- **Long-term memory** -- a filter extracts facts from conversations and injects relevant memories into future prompts
-- **Voice** -- speech-to-text (local Whisper) and text-to-speech (gTTS, OpenAI-compatible API)
-- **RAG** -- upload PDFs, DOCX, CSV and ask questions; embeddings via local sentence-transformers
-- **Usage tracking** -- per-user budgets, spend tracking, model usage stats accessible from chat
-- **LLM tracing** -- every request traced in Langfuse for debugging and cost analysis
-- **Monitoring** -- Prometheus metrics with pre-built Grafana dashboards
-- **Security** -- nginx rate limiting, security headers, attack path blocking, no-new-privileges on all containers
+Already a pro? Just edit this README.md and make it your own. Want to make it easy? [Use the template at the bottom](#editing-this-readme)!
 
-## Architecture
+## Add your files
+
+- [ ] [Create](https://docs.gitlab.com/ee/user/project/repository/web_editor.html#create-a-file) or [upload](https://docs.gitlab.com/ee/user/project/repository/web_editor.html#upload-a-file) files
+- [ ] [Add files using the command line](https://docs.gitlab.com/ee/gitlab-basics/add-file.html#add-a-file-using-the-command-line) or push an existing Git repository with the following command:
 
 ```
-User --> Nginx (:80) --> OpenWebUI (:8080)
-                              |
-                         LiteLLM (:4000) --> Anthropic API
-                              |              OpenAI API
-                              |              OpenRouter (free models)
-                              |              DashScope / Qwen API
-                              |
-                    Memory Service (:8001)  <-- OpenWebUI filter (inlet/outlet)
-                    TTS Service (:8002)     <-- gTTS
-                    Langfuse (:3001)        <-- LLM tracing
-                    Prometheus (:9090)      <-- metrics
-                    Grafana (:3002)         <-- dashboards
+cd existing_repo
+git remote add origin https://git.truetecharena.ru/tta/true-tech-hack2026-gpthub/template.git
+git branch -M main
+git push -uf origin main
 ```
 
-OpenWebUI sends all LLM requests to LiteLLM (`OPENAI_API_BASE_URLS=http://litellm:4000/v1`). The `mws_memory` global filter searches the Memory Service for relevant user memories and injects them into the system prompt before each request. LiteLLM translates requests to each provider's native format and sends traces to Langfuse.
+## Integrate with your tools
 
-## Services
+- [ ] [Set up project integrations](https://git.truetecharena.ru/tta/true-tech-hack2026-gpthub/template/-/settings/integrations)
 
-| Service | Image / Build | Host Port | Description |
-|---------|---------------|-----------|-------------|
-| **postgres** | pgvector/pgvector:pg16 | -- | PostgreSQL with pgvector; 4 databases (openwebui, litellm, langfuse, memory) |
-| **redis** | redis:7-alpine | -- | Caching for LiteLLM response cache |
-| **litellm** | build: ./litellm | -- | AI gateway, model routing, fallbacks, spend tracking |
-| **openwebui** | ghcr.io/open-webui/open-webui:main | 3000 | Chat UI, RAG, file uploads, admin settings |
-| **memory-service** | build: ./memory-service | -- | FastAPI + pgvector; stores and searches user memories |
-| **tts-service** | build: ./tts-service | -- | gTTS-based text-to-speech, OpenAI-compatible API |
-| **langfuse** | langfuse/langfuse:2 | -- | LLM tracing and analytics |
-| **prometheus** | prom/prometheus:latest | -- | Metrics collection (30d retention) |
-| **grafana** | grafana/grafana:latest | 3002 | Dashboards and alerting |
-| **nginx** | nginx:alpine | 80 | Reverse proxy with rate limiting and security headers |
+## Collaborate with your team
 
-Internal services (marked `--`) are accessible only via the Docker network, not exposed to the host.
+- [ ] [Invite team members and collaborators](https://docs.gitlab.com/ee/user/project/members/)
+- [ ] [Create a new merge request](https://docs.gitlab.com/ee/user/project/merge_requests/creating_merge_requests.html)
+- [ ] [Automatically close issues from merge requests](https://docs.gitlab.com/ee/user/project/issues/managing_issues.html#closing-issues-automatically)
+- [ ] [Enable merge request approvals](https://docs.gitlab.com/ee/user/project/merge_requests/approvals/)
+- [ ] [Set auto-merge](https://docs.gitlab.com/ee/user/project/merge_requests/merge_when_pipeline_succeeds.html)
 
-## Models
+## Test and Deploy
 
-| Alias | Provider | Underlying Model | Notes |
-|-------|----------|-------------------|-------|
-| `mws/auto` | Smart Router | complexity_router | Auto-selects Sonnet or Opus based on query complexity |
-| `mws/sonnet` | Anthropic | claude-sonnet-4-6 | Direct API, requires balance |
-| `mws/opus` | Anthropic | claude-opus-4-6 | Direct API, requires balance |
-| `mws/gpt-4o` | OpenAI | gpt-4o | Direct API |
-| `mws/gpt-4o-mini` | OpenAI | gpt-4o-mini | Direct API, cost-efficient |
-| `mws/o3-mini` | OpenAI | o3-mini | Direct API, reasoning model |
-| `mws/nemotron` | OpenRouter | nvidia/nemotron-3-super-120b | Free tier |
-| `mws/nemotron-nano` | OpenRouter | nvidia/nemotron-nano-9b-v2 | Free tier |
-| `mws/qwen-coder` | OpenRouter | qwen/qwen3-coder | Free tier |
-| `mws/qwen-or` | OpenRouter | qwen/qwen3-next-80b | Free tier |
-| `mws/qwen` | DashScope | qwen-plus | Requires QWEN_API_KEY |
+Use the built-in continuous integration in GitLab.
 
-Fallback chains: Opus -> Sonnet -> GPT-4o -> Nemotron; Sonnet -> Opus -> GPT-4o -> Nemotron; Auto -> GPT-4o-mini -> Nemotron.
+- [ ] [Get started with GitLab CI/CD](https://docs.gitlab.com/ee/ci/quick_start/index.html)
+- [ ] [Analyze your code for known vulnerabilities with Static Application Security Testing (SAST)](https://docs.gitlab.com/ee/user/application_security/sast/)
+- [ ] [Deploy to Kubernetes, Amazon EC2, or Amazon ECS using Auto Deploy](https://docs.gitlab.com/ee/topics/autodevops/requirements.html)
+- [ ] [Use pull-based deployments for improved Kubernetes management](https://docs.gitlab.com/ee/user/clusters/agent/)
+- [ ] [Set up protected environments](https://docs.gitlab.com/ee/ci/environments/protected_environments.html)
 
-## Quick Start
+***
 
-### Prerequisites
+# Editing this README
 
-- Docker and Docker Compose v2
-- `make` (optional but recommended)
-- API keys: at minimum, an OpenRouter key (free) for `mws/nemotron` models
+When you're ready to make this README your own, just edit this file and use the handy template below (or feel free to structure it however you want - this is just a starting point!). Thanks to [makeareadme.com](https://www.makeareadme.com/) for this template.
 
-### 1. Clone and configure
+## Suggestions for a good README
 
-```bash
-git clone <repository-url>
-cd mws-gpt
-cp .env.example .env
-```
+Every project is different, so consider which of these sections apply to yours. The sections used in the template are suggestions for most open source projects. Also keep in mind that while a README can be too long and detailed, too long is better than too short. If you think your README is too long, consider utilizing another form of documentation rather than cutting out information.
 
-Edit `.env` and fill in:
-- `ANTHROPIC_API_KEY` -- for Claude models (optional if using free models only)
-- `OPENAI_API_KEY` -- OpenAI API key for GPT-4o, GPT-4o-mini, o3-mini (optional)
-- `OPENROUTER_API_KEY` -- OpenRouter API key for free models (Nemotron, Qwen-coder, etc.)
-- `QWEN_API_KEY` -- for Qwen via DashScope (optional)
+## Name
+Choose a self-explaining name for your project.
 
-Generate secrets for the remaining keys:
+## Description
+Let people know what your project can do specifically. Provide context and add a link to any reference visitors might be unfamiliar with. A list of Features or a Background subsection can also be added here. If there are alternatives to your project, this is a good place to list differentiating factors.
 
-```bash
-make gen-secrets
-# Copy the output values into .env
-```
+## Badges
+On some READMEs, you may see small images that convey metadata, such as whether or not all the tests are passing for the project. You can use Shields to add some to your README. Many services also have instructions for adding a badge.
 
-### 2. Build and start
+## Visuals
+Depending on what you are making, it can be a good idea to include screenshots or even a video (you'll frequently see GIFs rather than actual videos). Tools like ttygif can help, but check out Asciinema for a more sophisticated method.
 
-```bash
-make build
-make setup
-```
+## Installation
+Within a particular ecosystem, there may be a common way of installing things, such as using Yarn, NuGet, or Homebrew. However, consider the possibility that whoever is reading your README is a novice and would like more guidance. Listing specific steps helps remove ambiguity and gets people to using your project as quickly as possible. If it only runs in a specific context like a particular programming language version or operating system or has dependencies that have to be installed manually, also add a Requirements subsection.
 
-### 3. Create admin account
+## Usage
+Use examples liberally, and show the expected output if you can. It's helpful to have inline the smallest example of usage that you can demonstrate, while providing links to more sophisticated examples if they are too long to reasonably include in the README.
 
-Open http://localhost:3000 and register. The first user becomes admin.
+## Support
+Tell people where they can go to for help. It can be any combination of an issue tracker, a chat room, an email address, etc.
 
-## Commands
+## Roadmap
+If you have ideas for releases in the future, it is a good idea to list them in the README.
 
-| Command | Description |
-|---------|-------------|
-| `make up` | Start all services |
-| `make down` | Stop all services |
-| `make ps` | Show service status |
-| `make build` | Build custom images (litellm, memory-service, tts-service) |
-| `make setup` | Start services and print setup instructions |
-| `make logs` | Tail logs for all services |
-| `make logs-openwebui` | Tail OpenWebUI logs |
-| `make logs-litellm` | Tail LiteLLM logs |
-| `make gen-secrets` | Generate random secrets for .env |
-| `make reset` | Destroy volumes and rebuild (destructive) |
-| `make prod` | Start with production overrides |
-| `make backup` | Backup all 4 PostgreSQL databases |
-| `make restore DB=<db> FILE=<path>` | Restore a specific database from backup |
+## Contributing
+State if you are open to contributions and what your requirements are for accepting them.
 
-## Web UIs
+For people who want to make changes to your project, it's helpful to have some documentation on how to get started. Perhaps there is a script that they should run or some environment variables that they need to set. Make these steps explicit. These instructions could also be useful to your future self.
 
-| Service | URL | Credentials |
-|---------|-----|-------------|
-| OpenWebUI | http://localhost (nginx) or http://localhost:3000 (direct) | First registered user = admin |
-| Langfuse | http://localhost:3001 | Created on first visit |
-| Grafana | http://localhost:3002 | admin / admin (or `GRAFANA_ADMIN_PASSWORD`) |
-| Prometheus | http://localhost:9090 | No auth |
-| Memory Service API | http://localhost:8001/docs | No auth |
+You can also document commands to lint the code or run tests. These steps help to ensure high code quality and reduce the likelihood that the changes inadvertently break something. Having instructions for running tests is especially helpful if it requires external setup, such as starting a Selenium server for testing in a browser.
 
-## Production
-
-Use `docker-compose.prod.yml` for production deployments:
-
-```bash
-make prod
-# or: docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
-```
-
-Production overrides include:
-- **Resource limits** -- memory and CPU caps for all 10 services (~4.5 GB total RAM)
-- **Log rotation** -- json-file driver, 10 MB per file, 3 files per service
-- **Restart policy** -- `always` instead of `unless-stopped`
-
-### Backups
-
-```bash
-make backup                              # dumps all 4 databases to backups/
-make restore DB=memory FILE=backups/memory_2026-03-29_120000.sql.gz
-```
-
-Backups older than 7 days are automatically cleaned up.
-
-## Security
-
-- **Nginx hardening** -- rate limiting (10 req/s general, 5 req/s API), security headers (X-Frame-Options, CSP, X-Content-Type-Options), blocked attack paths (.env, .git, wp-admin, phpmyadmin, etc.)
-- **Container isolation** -- `no-new-privileges` on all services; read-only filesystems on nginx and prometheus; internal services not exposed to host
-- **Secrets validation** -- run `bash scripts/check-secrets.sh` to verify .env completeness, detect weak passwords, and scan for leaked API keys in tracked files
-- **HTTPS ready** -- nginx config includes commented SSL block for TLS 1.2/1.3 with modern ciphersuites
-
-## Key Files
-
-| File | Purpose |
-|------|---------|
-| `docker-compose.yml` | Full 10-service stack |
-| `docker-compose.prod.yml` | Production overrides (limits, logging) |
-| `litellm/config.yaml` | Model definitions, routing, fallbacks, cache |
-| `memory-service/app/` | Memory Service source (FastAPI + pgvector) |
-| `tts-service/main.py` | TTS endpoint (gTTS) |
-| `pipelines/memory_function.py` | OpenWebUI filter for memory injection |
-| `pipelines/memory_tool.py` | Chat tool for viewing/managing memories |
-| `pipelines/usage_stats_tool.py` | Chat tool for usage statistics |
-| `nginx/nginx.conf` | Reverse proxy with security config |
-| `monitoring/` | Prometheus config and Grafana dashboards |
-| `scripts/` | Database init, backup, restore, secrets check |
-| `.env.example` | Template for environment variables |
-| `CLAUDE.md` | AI agent instructions |
+## Authors and acknowledgment
+Show your appreciation to those who have contributed to the project.
 
 ## License
+For open source projects, say how it is licensed.
 
-TBD
+## Project status
+If you have run out of energy or time for your project, put a note at the top of the README saying that development has slowed down or stopped completely. Someone may choose to fork your project or volunteer to step in as a maintainer or owner, allowing your project to keep going. You can also make an explicit request for maintainers.
