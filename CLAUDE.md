@@ -50,7 +50,9 @@ User → Nginx (:80) → OpenWebUI (:8080 internal, :3000 host)
 
 **RAG:** OpenWebUI embeddings are routed via LiteLLM to `mws/bge-m3`. OpenWebUI env: `RAG_EMBEDDING_ENGINE=openai`, `RAG_EMBEDDING_MODEL=mws/bge-m3`, `RAG_OPENAI_API_BASE_URL=http://litellm:4000/v1`. No HuggingFace download happens at startup. Files are uploaded via `/api/v1/files/` and indexed via `/api/v1/retrieval/process/file`. Knowledge bases via `/api/v1/knowledge/`.
 
-**Services (10 total):** postgres (pgvector), redis, litellm, openwebui, memory-service, tts-service, langfuse, prometheus, grafana, nginx.
+**Services (11 total):** postgres (pgvector), redis, litellm, openwebui, memory-service, tts-service, langfuse, prometheus, grafana, nginx, **bootstrap** (one-shot init).
+
+**Zero-config startup:** the stack is designed to come up with a single `docker compose up -d` (or `make up`) — no follow-up commands. A small `bootstrap` sidecar (`python:3.11-slim` + `scripts/bootstrap.py`) waits for postgres, waits for OpenWebUI's migrations to create the `function`/`user` tables, then polls for the first user signup. The moment the operator creates an admin account via the OpenWebUI web UI (first-signup-becomes-admin, default flow), the sidecar UPSERTs `pipelines/auto_router_function.py` and `pipelines/memory_function.py` directly into postgres with `is_active=true, is_global=true` — so `MWS GPT Auto 🎯` appears in the model dropdown and the `mws_memory` filter attaches to every chat, without any API token or manual upload. The sidecar is idempotent: re-running `docker compose up` picks up content changes from the source files and UPSERTs them. The older `make deploy-functions` / `scripts/deploy_function.sh` flow still exists as a manual escape hatch for redeploying edited sources without a stack restart (requires `OWUI_ADMIN_TOKEN`).
 
 ## Commands
 
@@ -117,7 +119,7 @@ bash scripts/check-secrets.sh   # validate .env, check for leaked secrets
 - `pipelines/memory_function.py` — OpenWebUI filter function source (deployed via API as `mws_memory`)
 - `pipelines/memory_tool.py` — OpenWebUI Tool: view/search/delete user memories from chat
 - `pipelines/usage_stats_tool.py` — OpenWebUI Tool: model usage and spend statistics
-- `pipelines/auto_router_function.py` — **(phase-9, in progress)** OpenWebUI Pipe function "MWS GPT Auto 🎯": classifies each request (text/voice/image/file/URL) and dispatches to the right subagent + model. Single source file, deployed via `make deploy-functions`.
+- `pipelines/auto_router_function.py` — **(phase-9, done)** OpenWebUI Pipe function "MWS GPT Auto 🎯": detects modality, classifies intent (rules → `mws/gpt-oss-20b` JSON fallback), dispatches 13 subagents in parallel with context isolation, streams the final aggregate answer. Deployed via `make deploy-functions`.
 - `PLAN_chat_agents.md` — master design doc for the auto-router: architecture, subagents, feature mapping, verification scenarios. Source of truth for `tasks/phase-9-*.md`.
 - `model_capabilities.md` — curated "task → best MWS model" map used by the auto-router classifier and documented for humans
 - `openwebui/static/custom.css` — MWS custom theme (volume-mounted into container)
@@ -125,6 +127,7 @@ bash scripts/check-secrets.sh   # validate .env, check for leaked secrets
 - `monitoring/grafana/` — provisioning + dashboards JSON
 - `nginx/nginx.conf` — reverse proxy with rate limiting, security headers, attack path blocking, HTTPS-ready
 - `scripts/init-databases.sql` — PostgreSQL multi-database initialization
+- `scripts/bootstrap.py` — one-shot init sidecar: polls postgres for the first OpenWebUI user and UPSERTs `auto_router_function.py` + `memory_function.py` into the `function` table. Enables `docker compose up -d` to be the only command needed.
 - `scripts/check-secrets.sh` — `.env` validation and secret leak detection
 - `scripts/backup.sh` / `scripts/restore.sh` — PostgreSQL backup and restore
 - `.env` — all secrets and API keys (not committed)
@@ -167,4 +170,4 @@ All 8 phases of the initial build are **DONE** (completed 2026-03-28 — 2026-03
 
 **Post-Phase-8 migration (2026-04-10):** The stack was reworked to use a single provider — MWS GPT API — replacing the prior multi-provider setup (Anthropic, OpenAI direct, OpenRouter, DashScope). The smart `mws/auto` router was removed. RAG and STT were also migrated from local models (sentence-transformers, faster-whisper) to MWS GPT via LiteLLM to avoid HuggingFace downloads at first boot. Memory Service still has outdated default model names — see the warning above.
 
-**Phase 9 — Auto-Router (planned, 2026-04-11):** New orchestrator "MWS GPT Auto 🎯" — an OpenWebUI Pipe function that auto-detects request modality (text/voice/image/file/URL), classifies intent, and dispatches to the best MWS model via parallel subagents with context isolation. Covers 10 mandatory features from `GPTHub_features_template.xlsx` (text/voice/image/audio/files/web-search/URL-parsing/memory/auto-select/markdown). Decomposed into 12 task cards `tasks/phase-9-1..12-*.md`. Master design in `PLAN_chat_agents.md`. Decisions: DuckDuckGo for web search (no new containers), single primary chat model (no parallel merge), Deep Research + presentation generation are v1 stubs only, hybrid rules+LLM classifier, collapsible `<details>` block for routing UX.
+**Phase 9 — Auto-Router (done, 2026-04-11):** Shipped the "MWS GPT Auto 🎯" virtual model as a single-file OpenWebUI Pipe at `pipelines/auto_router_function.py`. Flow: rules-based `_detect` → hybrid `_classify_and_plan` (rules short-circuit → `mws/gpt-oss-20b` JSON fallback) → `asyncio.gather` across up to 4 subagents → streaming aggregator (`mws/t-pro` RU / `mws/gpt-alpha` EN). 13 subagents implemented: `general`, `ru_chat`, `code` (`qwen3-coder`), `reasoner` (`deepseek-r1-32b`, strips CoT before `### Answer:`), `long_doc` (`glm-4.6`), `vision` (`cotype-pro-vl`/`qwen2.5-vl-72b`), `stt` (`whisper-turbo` via multipart, then re-classifies the transcript), `image_gen` (`qwen-image`, returns `artifacts`), `web_fetch` (httpx + `llama-3.1-8b`), `web_search` (DuckDuckGo HTML + `kimi-k2`), `doc_qa` (relies on OpenWebUI built-in RAG/BGE-M3 + `glm-4.6`), plus `deep_research` and `presentation` as v1 stubs. Context-isolation invariant: orchestrator only holds `CompactResult.summary` (≤500 tokens), never raw sub-responses. Deployment: `scripts/deploy_function.sh` + `make deploy-functions`. docker-compose adds `ENABLE_RAG_WEB_SEARCH=true`, `RAG_WEB_SEARCH_ENGINE=duckduckgo`. Report in `tasks_done/phase-9-done.md`; E2E runtime verification is user-side (requires live `make up` + admin signup).
