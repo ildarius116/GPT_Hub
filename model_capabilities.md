@@ -21,7 +21,7 @@
 | Сильная общая модель (экономия) | `mws/llama-3.3-70b` | `mws/qwen2.5-72b` |
 | Мощная мультиязычная модель | `mws/qwen3-235b` | `mws/gpt-oss-120b` |
 | Анализ изображений (enterprise RU) | `mws/cotype-pro-vl` | `mws/qwen3-vl` |
-| Анализ изображений (общий) | `mws/qwen2.5-vl-72b` | `mws/qwen3-vl` |
+| Анализ изображений (общий) | `mws/qwen3-vl` | `mws/cotype-pro-vl` | <!-- `mws/qwen2.5-vl-72b` на апстриме игнорирует image_url (2026-04-12) -->
 | RAG / семантический поиск | `mws/bge-m3` | `mws/qwen3-embedding` |
 | Распознавание речи | `mws/whisper-turbo` | `mws/whisper-medium` |
 | Генерация изображений | `mws/qwen-image` | `mws/qwen-image-lightning` |
@@ -345,7 +345,7 @@
 Запрос на русском языке                           →  mws/qwen3-235b (первый выбор; mws/t-pro недоступен на upstream)
 Запрос содержит математику/логику/задачу          →  mws/deepseek-r1-32b (глубоко), mws/qwq-32b (быстро)
 Запрос с изображением (корп. документ RU)         →  mws/cotype-pro-vl
-Запрос с изображением (общий)                     →  mws/qwen2.5-vl-72b или mws/qwen3-vl
+Запрос с изображением (общий)                     →  mws/qwen3-vl (первый), mws/cotype-pro-vl (fallback)
 Запрос содержит "агент"/"инструмент"/"tool"       →  mws/kimi-k2 или mws/glm-4.6
 Длинный документ / >100K токенов контекст         →  mws/glm-4.6 (200K)
 Поиск/RAG/эмбеддинги                              →  mws/bge-m3
