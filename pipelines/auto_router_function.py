@@ -98,7 +98,7 @@ class Pipe:
             description="Model used by the hybrid classifier (JSON mode).",
         )
         default_ru_model: str = Field(
-            default="mws/t-pro",
+            default="mws/qwen3-235b",
             description="Default final aggregator model for Russian requests.",
         )
         default_en_model: str = Field(
@@ -352,13 +352,13 @@ class Pipe:
             '"complexity": "trivial"|"normal"|"hard", "primary_model": "mws/...", '
             '"reason": "<one sentence>"}. '
             "Valid intents: code, math, ru_chat, general, long_doc, deep_research, presentation. "
-            "Valid primary_model: mws/gpt-alpha, mws/t-pro, mws/qwen3-coder, "
+            "Valid primary_model: mws/gpt-alpha, mws/qwen3-235b, mws/qwen3-coder, "
             "mws/deepseek-r1-32b, mws/glm-4.6, mws/kimi-k2, mws/llama-3.1-8b. "
             "Examples: "
             '"write fibonacci in rust" -> {"intents":["code"],"primary_model":"mws/qwen3-coder",...}; '
             '"Провести глубокое исследование рынка EV" -> {"intents":["deep_research"],"primary_model":"mws/kimi-k2",...}; '
             '"Сделай презентацию про Python" -> {"intents":["presentation"],"primary_model":"mws/gpt-alpha",...}; '
-            '"Привет, как дела?" -> {"intents":["ru_chat"],"primary_model":"mws/t-pro",...}.'
+            '"Привет, как дела?" -> {"intents":["ru_chat"],"primary_model":"mws/qwen3-235b",...}.'
         )
         try:
             resp = await self._call_litellm(
@@ -688,7 +688,7 @@ class Pipe:
 
     async def _sa_ru_chat(self, task: SubTask) -> CompactResult:
         return await self._text_subagent(
-            model=task.model or "mws/t-pro",
+            model=task.model or "mws/qwen3-235b",
             system="Ты — дружелюбный и лаконичный ассистент. Отвечай на русском в markdown.",
             task=task,
             temperature=0.7,
