@@ -327,6 +327,24 @@ class Pipe:
         if plan:
             return plan[: self.valves.max_subagents]
 
+        # Rule short-circuit: long user input → sa_long_doc / mws/glm-4.6.
+        # Anything ≥1500 chars is almost certainly a document/transcript, not a
+        # chat turn, and glm-4.6 handles long context better than qwen3-235b.
+        # This runs before the reasoner/LLM-classifier branches so long math
+        # proofs still go to reasoner (short) but long narrative text goes here.
+        if len(detected.last_user_text or "") >= 1500 and not _REASONER_RE.search(
+            detected.last_user_text or ""
+        ):
+            plan.append(
+                SubTask(
+                    kind="long_doc",
+                    input_text=detected.last_user_text,
+                    model="mws/glm-4.6",
+                    metadata={"lang": detected.lang, "rule": "long_text_regex"},
+                )
+            )
+            return plan[: self.valves.max_subagents]
+
         # Rule short-circuit: formal proofs / math reasoning → sa_reasoner.
         # The LLM classifier tends to label "Докажи, что…" as generic chat,
         # but we want deepseek-r1-32b to handle the CoT and strip it.
