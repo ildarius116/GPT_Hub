@@ -82,19 +82,6 @@ _REASONER_RE = re.compile(
     r"\bформально\b|\bprove\b|\bproof\b|\btheorem\b|\blemma\b|\bformally\b|"
     r"[∀∃∈∉⊂⊆≡⇒⇔])"
 )
-_MEMORY_RECALL_RE = re.compile(
-    r"(?i)("
-    r"о ч[её]м (мы )?(говорили|был разговор|шла речь|шёл разговор|общались|беседовали)|"
-    r"что (мы )?обсуждали|когда мы говорили|"
-    r"что я тебе (рассказывал|говорил|писал)|"
-    r"помнишь,?\s+(как|что|о)|"
-    r"(вчера|позавчера|на прошлой неделе|в прошлом месяце|в прошлом году)\b|"
-    r"\d+\s+(час|день|дня|дней|недел[юяи]|месяц[ае]?в?|год[а]?|лет)\s+назад|"
-    r"what did we (discuss|talk about|say)|do you remember|"
-    r"last\s+(week|month|year)|a\s+(week|month|year)\s+ago|"
-    r"yesterday\b"
-    r")"
-)
 
 
 # ---------------------------------------------------------------------------
@@ -412,19 +399,6 @@ class Pipe:
         if plan:
             return plan[: self.valves.max_subagents]
 
-        # Rule short-circuit: memory_recall. Must run BEFORE long_doc and
-        # reasoner so long questions about chat history don't bleed into
-        # sa_long_doc / sa_reasoner.
-        if _MEMORY_RECALL_RE.search(detected.last_user_text or ""):
-            plan.append(
-                SubTask(
-                    kind="memory_recall",
-                    input_text=detected.last_user_text,
-                    metadata={"user_id": user_id, "lang": detected.lang},
-                )
-            )
-            return plan[: self.valves.max_subagents]
-
         # Rule short-circuit: long user input → sa_long_doc / mws/glm-4.6.
         # Anything ≥1500 chars is almost certainly a document/transcript, not a
         # chat turn, and glm-4.6 handles long context better than qwen3-235b.
@@ -529,7 +503,8 @@ class Pipe:
             '"Привет, как дела?" -> {"intents":["ru_chat"],"primary_model":"mws/qwen3-235b",...}; '
             '"о чём мы говорили неделю назад" -> {"intents":["memory_recall"],"lang":"ru","time_window":{"from":"2026-04-01T00:00:00Z","to":"2026-04-08T23:59:59Z"}}; '
             '"какая была тема позавчерашнего разговора" -> {"intents":["memory_recall"],"lang":"ru","time_window":{"from":"2026-04-10T00:00:00Z","to":"2026-04-10T23:59:59Z"}}; '
-            '"о чём был разговор вчера" -> {"intents":["memory_recall"],"lang":"ru","time_window":{"from":"2026-04-11T00:00:00Z","to":"2026-04-11T23:59:59Z"}}.'
+            '"о чём был разговор вчера" -> {"intents":["memory_recall"],"lang":"ru","time_window":{"from":"2026-04-11T00:00:00Z","to":"2026-04-11T23:59:59Z"}}; '
+            '"о чём мы сегодня разговаривали" -> {"intents":["memory_recall"],"lang":"ru","time_window":{"from":"2026-04-12T00:00:00Z","to":"2026-04-12T23:59:59Z"}}.'
         )
         try:
             resp = await self._call_litellm(
