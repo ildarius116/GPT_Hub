@@ -14,7 +14,7 @@ import os
 import re
 import uuid
 from dataclasses import dataclass, field, asdict
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any, AsyncGenerator, Optional
 
 import httpx
@@ -452,6 +452,11 @@ class Pipe:
         ):
             kind = "memory_recall"
 
+        # If routed to memory_recall but no time_window from classifier,
+        # try to extract one from the user text.
+        if kind == "memory_recall" and not time_window:
+            time_window = self._extract_time_window(detected.last_user_text)
+
         meta: dict = {"lang": detected.lang, "user_id": user_id}
         if time_window:
             meta["time_window"] = time_window
@@ -464,6 +469,45 @@ class Pipe:
             )
         )
         return plan[: self.valves.max_subagents]
+
+    @staticmethod
+    def _extract_time_window(text: str) -> Optional[dict]:
+        """Extract a time window from user text based on common time markers."""
+        t = (text or "").lower()
+        today = datetime.now(timezone.utc).date()
+
+        if "сегодня" in t or "today" in t:
+            return {
+                "from": f"{today}T00:00:00Z",
+                "to": f"{today}T23:59:59Z",
+            }
+        if "вчера" in t or "yesterday" in t:
+            d = today - timedelta(days=1)
+            return {"from": f"{d}T00:00:00Z", "to": f"{d}T23:59:59Z"}
+        if "позавчера" in t:
+            d = today - timedelta(days=2)
+            return {"from": f"{d}T00:00:00Z", "to": f"{d}T23:59:59Z"}
+        if "прошлой неделе" in t or "неделю назад" in t or "last week" in t or "a week ago" in t:
+            return {
+                "from": f"{today - timedelta(days=7)}T00:00:00Z",
+                "to": f"{today}T23:59:59Z",
+            }
+        if "прошлом месяце" in t or "месяц назад" in t or "last month" in t or "a month ago" in t:
+            return {
+                "from": f"{today - timedelta(days=30)}T00:00:00Z",
+                "to": f"{today}T23:59:59Z",
+            }
+        # "N дней/недель назад"
+        import re as _re
+        m = _re.search(r"(\d+)\s+(дн|день|дня|дней)\s+назад", t)
+        if m:
+            d = today - timedelta(days=int(m.group(1)))
+            return {"from": f"{d}T00:00:00Z", "to": f"{d}T23:59:59Z"}
+        m = _re.search(r"(\d+)\s+(недел)\S*\s+назад", t)
+        if m:
+            d = today - timedelta(weeks=int(m.group(1)))
+            return {"from": f"{d}T00:00:00Z", "to": f"{today}T23:59:59Z"}
+        return None
 
     _CONV_MARKERS = (
         "говорили", "разговаривали", "обсуждали", "общались",
