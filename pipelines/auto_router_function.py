@@ -203,7 +203,14 @@ class Pipe:
                 det.has_document = True
                 det.document_attachments.append(f)
 
-        # Last user message
+        # Last user message.
+        # NOTE: OpenWebUI can inject prior-turn citations/sources as extra text
+        # parts inside the current user message's `content` list. Joining all
+        # parts leaks old URLs and text into the current turn and skews routing
+        # (observed: follow-up "weather in Moscow" still carried a google.com
+        # URL from an earlier turn and got force-routed to web_fetch). Take
+        # only the LAST non-empty text part — conventionally the user's actual
+        # typed input — and ignore injected context parts.
         last_user_text = ""
         for msg in reversed(messages):
             if (msg or {}).get("role") != "user":
@@ -212,18 +219,20 @@ class Pipe:
             if isinstance(content, str):
                 last_user_text = content
             elif isinstance(content, list):
-                parts: list[str] = []
+                last_text_part = ""
                 for item in content:
                     if not isinstance(item, dict):
                         continue
                     itype = item.get("type")
                     if itype == "text":
-                        parts.append(item.get("text") or "")
+                        t = item.get("text") or ""
+                        if t.strip():
+                            last_text_part = t
                     elif itype == "image_url":
                         det.has_image = True
                         url = (item.get("image_url") or {}).get("url") or ""
                         det.image_attachments.append({"url": url, "type": "image/*"})
-                last_user_text = "\n".join(p for p in parts if p)
+                last_user_text = last_text_part
             break
         det.last_user_text = last_user_text or ""
 
@@ -292,15 +301,22 @@ class Pipe:
                 )
             )
 
+        # URL short-circuit: only force web_fetch when the URL dominates the
+        # user's message (a bare link with brief framing like "что здесь?").
+        # For longer conversational text containing a URL incidentally, fall
+        # through to the classifier — otherwise every follow-up question in a
+        # chat that once cited a URL gets force-routed to web_fetch.
         if detected.urls:
-            plan.append(
-                SubTask(
-                    kind="web_fetch",
-                    input_text=detected.last_user_text,
-                    model="mws/llama-3.1-8b",
-                    metadata={"urls": detected.urls, "lang": detected.lang},
+            non_url_text = _URL_RE.sub("", detected.last_user_text).strip()
+            if len(non_url_text) <= 60:
+                plan.append(
+                    SubTask(
+                        kind="web_fetch",
+                        input_text=detected.last_user_text,
+                        model="mws/llama-3.1-8b",
+                        metadata={"urls": detected.urls, "lang": detected.lang},
+                    )
                 )
-            )
 
         if detected.wants_image_gen:
             plan.append(
