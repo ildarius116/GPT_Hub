@@ -184,10 +184,26 @@ class Pipe:
             else self.valves.default_en_model
         )
 
-        async for chunk in self._stream_aggregate(
-            final_model, messages, results, detected, trace_id=trace_id
-        ):
-            yield chunk
+        has_artifacts = any(
+            art.get("url") for r in results for art in (r.artifacts or [])
+        )
+        if has_artifacts:
+            # Buffer the full response so we can strip hallucinated image links
+            buf: list[str] = []
+            async for chunk in self._stream_aggregate(
+                final_model, messages, results, detected, trace_id=trace_id
+            ):
+                buf.append(chunk)
+            text = "".join(buf)
+            # Remove markdown image links — real images are appended via _render_artifacts
+            text = re.sub(r"!\[[^\]]*\]\([^\)]+\)", "", text)
+            text = re.sub(r"\n{3,}", "\n\n", text).strip()
+            yield text
+        else:
+            async for chunk in self._stream_aggregate(
+                final_model, messages, results, detected, trace_id=trace_id
+            ):
+                yield chunk
 
         # Append artifacts (generated images) as markdown after stream
         artifact_md = self._render_artifacts(results)
@@ -779,8 +795,9 @@ class Pipe:
             "субагентов. Используй их как факты. Не показывай пользователю внутреннюю "
             "кухню и не дублируй служебные теги вроде [sa_*]. "
             "Если среди результатов есть ошибки — кратко упомяни, но продолжи отвечать. "
-            "Если есть artifacts (изображения) — они будут добавлены в сообщение после "
-            "твоего ответа, можешь их анонсировать одной строкой. "
+            "Если есть artifacts (изображения) — они будут добавлены автоматически после "
+            "твоего ответа. НИКОГДА не вставляй markdown-ссылки на изображения (![...](...)). "
+            "Просто скажи одной строкой, что изображение сгенерировано. "
             f"{lang_instr}\n\n--- SUBAGENT RESULTS ---\n{scratchpad}"
         )
 
