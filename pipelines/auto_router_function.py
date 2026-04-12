@@ -915,6 +915,9 @@ class Pipe:
             "Если есть artifacts (изображения) — они будут добавлены автоматически после "
             "твоего ответа. НИКОГДА не вставляй markdown-ссылки на изображения (![...](...)). "
             "Просто скажи одной строкой, что изображение сгенерировано. "
+            "Если в результатах субагентов есть 'Citations:', обязательно вставь "
+            "ссылки в текст как пронумерованные цитаты [1], [2], [3] и перечисли "
+            "их в конце ответа в формате: [1] URL, [2] URL и т.д. "
             f"{lang_instr}\n\n--- SUBAGENT RESULTS ---\n{scratchpad}"
         )
 
@@ -1206,9 +1209,36 @@ class Pipe:
     # ------------------------------------------------------------------
 
     async def _fetch_url_text(self, url: str) -> str:
-        headers = {"User-Agent": "Mozilla/5.0 MWS-GPT-Hub"}
+        # Wikipedia: use REST API to avoid 403 scraping blocks
+        wiki_match = re.match(
+            r"https?://(\w+)\.wikipedia\.org/wiki/(.+)", url
+        )
+        if wiki_match:
+            lang, article = wiki_match.group(1), wiki_match.group(2)
+            api_url = f"https://{lang}.wikipedia.org/api/rest_v1/page/summary/{article}"
+            headers = {
+                "User-Agent": "MWS-GPT-Hub/1.0 (https://gpt.mws.ru; admin@mws.ru)"
+            }
+            async with httpx.AsyncClient(
+                timeout=15, headers=headers, follow_redirects=True
+            ) as cli:
+                r = await cli.get(api_url)
+                if r.status_code == 200:
+                    data = r.json()
+                    return data.get("extract", "")[:6000]
+                # Fall through to regular fetch if API fails
+
+        headers = {
+            "User-Agent": (
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/120.0.0.0 Safari/537.36"
+            ),
+            "Accept": "text/html,application/xhtml+xml",
+            "Accept-Language": "ru-RU,ru;q=0.9,en-US;q=0.8,en;q=0.7",
+        }
         async with httpx.AsyncClient(
-            timeout=10, headers=headers, follow_redirects=True
+            timeout=15, headers=headers, follow_redirects=True
         ) as cli:
             r = await cli.get(url)
             r.raise_for_status()
@@ -1262,31 +1292,49 @@ class Pipe:
         )
 
     async def _ddg_search(self, query: str, n: int = 3) -> list[dict]:
-        """Lightweight DuckDuckGo HTML search. Returns [{title,url,snippet}]."""
-        url = "https://duckduckgo.com/html/"
-        headers = {"User-Agent": "Mozilla/5.0 MWS-GPT-Hub"}
+        """Lightweight DuckDuckGo Lite search. Returns [{title,url,snippet}]."""
+        url = "https://lite.duckduckgo.com/lite/"
+        headers = {
+            "User-Agent": (
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/120.0.0.0 Safari/537.36"
+            )
+        }
         async with httpx.AsyncClient(
-            timeout=10, headers=headers, follow_redirects=True
+            timeout=15, headers=headers, follow_redirects=True
         ) as cli:
             r = await cli.post(url, data={"q": query})
             r.raise_for_status()
             html = r.text
-        # Very small HTML parser — targets DuckDuckGo HTML results layout
-        results: list[dict] = []
-        for m in re.finditer(
-            r'<a[^>]+class="result__a"[^>]+href="([^"]+)"[^>]*>(.*?)</a>'
-            r'[\s\S]*?<a[^>]+class="result__snippet"[^>]*>(.*?)</a>',
-            html,
-        ):
-            href, title, snippet = m.group(1), m.group(2), m.group(3)
-            title = re.sub(r"<[^>]+>", "", title).strip()
-            snippet = re.sub(r"<[^>]+>", "", snippet).strip()
-            if href.startswith("//duckduckgo.com/l/?uddg="):
-                import urllib.parse as _u
+        # DDG Lite: each result is a pair of <tr> rows:
+        #   <a class='result-link' href="...">title</a>
+        #   <td class='result-snippet'>snippet text</td>
+        import html as _html
 
-                parsed = _u.parse_qs(href.split("?", 1)[1])
-                real = parsed.get("uddg", [href])[0]
-                href = _u.unquote(real)
+        results: list[dict] = []
+        links = list(
+            re.finditer(
+                r"<a[^>]+href=['\"]([^'\"]+)['\"][^>]+class=['\"]result-link['\"][^>]*>(.*?)</a>",
+                html,
+                re.DOTALL,
+            )
+        )
+        snippets = list(
+            re.finditer(
+                r"<td[^>]+class=['\"]result-snippet['\"][^>]*>(.*?)</td>",
+                html,
+                re.DOTALL,
+            )
+        )
+        for i, link_m in enumerate(links):
+            href = link_m.group(1).strip()
+            title = re.sub(r"<[^>]+>", "", link_m.group(2)).strip()
+            title = _html.unescape(title)
+            snippet = ""
+            if i < len(snippets):
+                snippet = re.sub(r"<[^>]+>", "", snippets[i].group(1)).strip()
+                snippet = _html.unescape(snippet)
             results.append({"title": title, "url": href, "snippet": snippet})
             if len(results) >= n:
                 break
