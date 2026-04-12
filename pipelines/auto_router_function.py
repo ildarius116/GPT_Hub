@@ -286,6 +286,29 @@ class Pipe:
                 pass
             last_user_text = _doc_tag_re.sub("", last_user_text).strip()
 
+        # --- Strip OpenWebUI RAG template wrapper ---
+        # When OWUI has retrieval/web_search enabled and the chat has a
+        # knowledge source (e.g. a URL previously fetched by sa_web_fetch),
+        # it wraps every follow-up user turn in a template like:
+        #
+        #   ### Task: ...instructions...
+        #   <context>
+        #   <source id="1" name="https://..."> ...full page content... </source>
+        #   </context>
+        #
+        #   *   <user's actual query>
+        #
+        # This leaks the page URL and content into our router and forces
+        # web_fetch on every follow-up. Strip everything up to and
+        # including the closing </context> tag and keep only the real
+        # user query from the tail.
+        if "</context>" in last_user_text and "<context>" in last_user_text:
+            tail = last_user_text.split("</context>", 1)[1]
+            # Trim bullet / whitespace prefixes: "*   ", "- ", "• ", leading blanks
+            tail = re.sub(r"^[\s\*\-\u2022]+", "", tail).strip()
+            if tail:
+                last_user_text = tail
+
         det.last_user_text = last_user_text or ""
 
         # URLs
