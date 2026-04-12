@@ -1,0 +1,82 @@
+[
+  {
+    "id": "D1",
+    "input": "Найди в интернете свежие новости про SpaceX",
+    "elapsed": 27.0,
+    "response_len": 1682,
+    "routing": {
+      "subagents": [],
+      "models": [],
+      "raw_block": "<summary>🎯 Routing decision</summary>\n"
+    },
+    "response_preview": "<details>\n<summary>🎯 Routing decision</summary>\n\n- **Lang:** `ru`\n- **Subagents:** `['web_search']`\n- **Models:** `['mws/kimi-k2']`\n- **Signals:** image=False, audio=False, doc=False, urls=0, img_gen=False, web_search=True\n\n</details>\n\n## Последние новости SpaceX\n\n**Производственные планы**  \n- SpaceX начала установку линий для упаковки чипов на новом заводе в Техасе [1].  \n- Intel будет сотрудничать с Terafab Илона Маска в строительстве завода по производству микросхем, что привело к росту акций Intel на 4,9% [1].\n\n**Запуски и миссии**  \n- Запуск Crew Dragon был отложен на месяц из-за повреждения ступени, сообщила Кикина [1].  \n- Корабль Crew Dragon с космонавтом Платоновым успешно вернулся на Землю 15 января [3].  \n- 17 января SpaceX провела 600-й запуск ракеты Falcon [3].\n\n**Спутниковая группировка Starlink**  \n- 31 марта Starlink потеряла связь с одним из спутников на орбите [3].  \n- 8 февраля SpaceX вывела на орбиту 25 новых интернет-спутников Starlink [3].  \n- Компания рассматрив",
+    "checks": {
+      "correct_subagent": true,
+      "correct_model": true,
+      "no_error": true,
+      "has_content": true,
+      "has_citations": true
+    },
+    "passed": true
+  },
+  {
+    "id": "D2",
+    "input": "Поищи в интернете цену на Tesla Model Y в России",
+    "elapsed": 24.0,
+    "response_len": 1269,
+    "routing": {
+      "subagents": [],
+      "models": [],
+      "raw_block": "<summary>🎯 Routing decision</summary>\n"
+    },
+    "response_preview": "<details>\n<summary>🎯 Routing decision</summary>\n\n- **Lang:** `ru`\n- **Subagents:** `['web_search']`\n- **Models:** `['mws/kimi-k2']`\n- **Signals:** image=False, audio=False, doc=False, urls=0, img_gen=False, web_search=True\n\n</details>\n\nЦены на Tesla Model Y в России в 2025 году зависят от комплектации и поставки через параллельный импорт. Обновлённая модель поступила в продажу с начала года, в основном из Китая.\n\n**Текущие цены:**\n- **Standard** (задний привод, 299 л.с.) — от **6 млн рублей** [2]  \n- **Long Range** (полный привод, 450 л.с.) — от **6,55 млн рублей** [2]  \n- В некоторых дилерских центрах, например в Краснодаре, версия Long Range 2025 года оценивается в **7,39 млн рублей** [3]\n\nРанее, до рестайлинга, новые Model Y стоили от 7 682 000 рублей [1]. Цены снизились по сравнению с мартом 2025 года, когда стартовая стоимость достигала 8,4 млн рублей. Обновлённая модель получила новый дизайн в стиле Cybertruck, увеличенный запас хода (до 719 км по циклу CLTC), улучшенную шумоизол",
+    "checks": {
+      "correct_subagent": true,
+      "correct_model": true,
+      "no_error": true,
+      "has_content": true,
+      "has_citations": true
+    },
+    "passed": true
+  },
+  {
+    "id": "D3",
+    "input": "Перескажи https://ru.wikipedia.org/wiki/Python",
+    "elapsed": 9.6,
+    "response_len": 2738,
+    "routing": {
+      "subagents": [],
+      "models": [],
+      "raw_block": "<summary>🎯 Routing decision</summary>\n"
+    },
+    "response_preview": "<details>\n<summary>🎯 Routing decision</summary>\n\n- **Lang:** `en`\n- **Subagents:** `['web_fetch']`\n- **Models:** `['mws/llama-3.1-8b']`\n- **Signals:** image=False, audio=False, doc=False, urls=1, img_gen=False, web_search=False\n\n</details>\n\nPython — это высокоуровневый, мультипарадигменный язык программирования, созданный Гвидо ван Россумом в конце 1980-х годов. Он был первоначально задуман как язык для быстрого прототипирования и быстрого создания скриптов, но со временем он развился в полноценный язык программирования.\n\n**История Python**\n\nPython был создан Гвидо ван Россумом в 1989 году, когда он работал в Центре научных и прикладных исследований в Амстердаме. Ван Россум хотел создать язык, который бы был простым, гибким и легко читаемым. Первая версия Python была выпущена в 1991 году, и она быстро стала популярной среди программистов.\n\n**Особенности Python**\n\nPython имеет следующие основные особенности:\n\n* **Мультипарадигменный язык**: поддерживает различные программные парадигмы, ",
+    "checks": {
+      "correct_subagent": true,
+      "correct_model": true,
+      "no_error": true,
+      "has_content": true,
+      "has_summary": true
+    },
+    "passed": true
+  },
+  {
+    "id": "D4",
+    "input": "What's on https://httpbin.org/html ?",
+    "elapsed": 3.0,
+    "response_len": 718,
+    "routing": {
+      "subagents": [],
+      "models": [],
+      "raw_block": "<summary>🎯 Routing decision</summary>\n"
+    },
+    "response_preview": "<details>\n<summary>🎯 Routing decision</summary>\n\n- **Lang:** `en`\n- **Subagents:** `['web_fetch']`\n- **Models:** `['mws/llama-3.1-8b']`\n- **Signals:** image=False, audio=False, doc=False, urls=1, img_gen=False, web_search=False\n\n</details>\n\nIt appears that https://httpbin.org/html is not a real web page, but rather a mock HTML response from the httpbin.org service. The text I provided earlier was actually a summary of a text, not a real web page. If you'd like to know more about Moby-Dick or the character Perth, I'd be happy to help. \n\nHowever, I can tell you that Perth is a character in Herman Melville's novel Moby-Dick. He is a blacksmith who is part of the crew on the whaleship Pequod, led by Captain Ahab.",
+    "checks": {
+      "correct_subagent": true,
+      "correct_model": true,
+      "no_error": true,
+      "has_content": true,
+      "has_summary": true
+    },
+    "passed": true
+  }
+]

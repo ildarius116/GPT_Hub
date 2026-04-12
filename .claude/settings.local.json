@@ -66,7 +66,9 @@
       "Read(//c/ProgramData/chocolatey/bin/**)",
       "Bash(powershell.exe -Command \"Get-Command sshpass -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Source\")",
       "Bash(choco list:*)",
-      "Bash(cmd:*)"
+      "Bash(cmd:*)",
+      "Bash(break)",
+      "Bash(bash scripts/deploy_function.sh pipelines/auto_router_function.py)"
     ]
   }
 }
