@@ -993,6 +993,16 @@ class Pipe:
             if detected.lang == "ru"
             else "Answer in English using markdown."
         )
+        # Extract memory context injected by the mws_memory inlet filter.
+        # It arrives as one or more role=system messages; without this we
+        # would silently drop them when building final_messages below.
+        memory_ctx = self._extract_memory_context(messages)
+        memory_block = (
+            f"\n\n--- CONTEXT FROM USER MEMORY ---\n{memory_ctx}\n"
+            "Используй эти факты, чтобы отвечать на вопросы о пользователе "
+            "(имя, работа, предпочтения). Не ссылайся на сам факт наличия памяти.\n"
+            if memory_ctx else ""
+        )
         system_prompt = (
             'Ты — финальный агент "MWS GPT Auto". Ниже — результаты работы вспомогательных '
             "субагентов. Используй их как факты. Не показывай пользователю внутреннюю "
@@ -1009,7 +1019,9 @@ class Pipe:
             "перевести предыдущий ответ — используй историю диалога, а НЕ результаты "
             "субагентов. Результаты субагентов полезны только для нового контента "
             "(поиск, fetch, генерация). "
-            f"{lang_instr}\n\n--- SUBAGENT RESULTS ---\n{scratchpad}"
+            f"{lang_instr}"
+            f"{memory_block}"
+            f"\n\n--- SUBAGENT RESULTS ---\n{scratchpad}"
         )
 
         # Pass conversation history so the aggregator understands context
@@ -1056,6 +1068,22 @@ class Pipe:
                 )
             except Exception as e2:
                 yield f"\n\n⚠️ Финальная модель недоступна: {e2}"
+
+    def _extract_memory_context(self, messages: list) -> str:
+        """Pull memory-injection text out of system messages added by the
+        `mws_memory` inlet filter.  The filter prepends lines starting with
+        'What you know about this user' — we keep everything from that
+        marker to the end of the system block."""
+        marker = "What you know about this user"
+        for msg in messages or []:
+            if (msg or {}).get("role") != "system":
+                continue
+            content = msg.get("content")
+            if not isinstance(content, str) or marker not in content:
+                continue
+            idx = content.find(marker)
+            return content[idx:].strip()
+        return ""
 
     def _last_user_message(self, messages: list) -> str:
         for msg in reversed(messages or []):
