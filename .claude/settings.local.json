@@ -68,7 +68,10 @@
       "Bash(choco list:*)",
       "Bash(cmd:*)",
       "Bash(break)",
-      "Bash(bash scripts/deploy_function.sh pipelines/auto_router_function.py)"
+      "Bash(bash scripts/deploy_function.sh pipelines/auto_router_function.py)",
+      "Bash(bash scripts/gen-selfsigned-cert.sh)",
+      "Bash(rm -f nginx/ssl/*.pem)",
+      "Bash(openssl req:*)"
     ]
   }
 }

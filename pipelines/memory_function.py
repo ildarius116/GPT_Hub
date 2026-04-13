@@ -20,8 +20,12 @@ class Filter:
             description="Memory Service URL",
         )
         search_limit: int = Field(
-            default=5,
+            default=8,
             description="Max memories to inject",
+        )
+        min_score: float = Field(
+            default=0.35,
+            description="Minimum cosine similarity score to inject a memory",
         )
         enabled: bool = Field(
             default=True,
@@ -146,8 +150,12 @@ class Filter:
         if not results or not isinstance(results, list):
             return body
 
-        # Include all results (score filtering disabled until real embeddings)
-        memories = results
+        # Filter by cosine similarity score so weakly-matching noise
+        # ("LinkedIn", "резюме", etc.) does not pollute the system prompt.
+        memories = [
+            m for m in results
+            if isinstance(m, dict) and m.get("score", 0) >= self.valves.min_score
+        ]
         if not memories:
             return body
 
