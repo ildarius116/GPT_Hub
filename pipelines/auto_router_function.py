@@ -11,6 +11,7 @@ import asyncio
 import base64
 import json
 import os
+import pathlib
 import re
 import uuid
 from dataclasses import dataclass, field, asdict
@@ -1970,6 +1971,15 @@ class Pipe:
         (with `id`) on success, `None` on any failure (missing token, non-200,
         transport error). Never raises — the caller decides on fallback."""
         token = os.getenv("OWUI_ADMIN_TOKEN", "").strip()
+        if not token:
+            # Fallback: bootstrap sidecar writes the auto-provisioned admin
+            # token here after first signup (shared bind-mount from host
+            # ./data/secrets). This makes pptx delivery work on a zero-config
+            # `docker compose up` without the operator ever touching .env.
+            try:
+                token = pathlib.Path("/owui_secrets/owui_admin_token").read_text(encoding="utf-8").strip()
+            except Exception:
+                token = ""
         if not token:
             if self.valves.debug:
                 print("[mws-auto] owui_upload: OWUI_ADMIN_TOKEN not set")
