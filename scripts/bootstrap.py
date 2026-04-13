@@ -27,12 +27,16 @@ from __future__ import annotations
 
 import os
 import pathlib
+import secrets
 import sys
 import time
 from typing import Any
 
 import psycopg2
 from psycopg2.extras import Json
+
+SECRETS_DIR = pathlib.Path(os.environ.get("SECRETS_DIR", "/secrets"))
+HOST_ENV_FILE = pathlib.Path(os.environ.get("HOST_ENV_FILE", "/host/.env"))
 
 PGHOST = os.environ.get("PGHOST", "postgres")
 PGPORT = int(os.environ.get("PGPORT", "5432"))
@@ -168,6 +172,113 @@ def seed_function(
     log(f"✓ seeded {fn_id} ({fn_type}, is_active=true, is_global=true)")
 
 
+def ensure_admin_api_token(cur, user_id: str) -> None:
+    """Generate (or reuse) an OpenWebUI API key for the admin and publish it
+    to (a) the shared /secrets file that the openwebui container mounts
+    read-only, and (b) the host .env file so it survives recreation.
+
+    OpenWebUI stores API keys in a dedicated `api_key` table with columns
+    (id, user_id, key, data, expires_at, last_used_at, created_at, updated_at).
+    It authenticates `Authorization: Bearer <token>` by matching `api_key.key`
+    against the token, so INSERTing a row with our generated value is enough
+    to make the token valid — no HTTP dance needed.
+    """
+    if not table_exists(cur, "api_key"):
+        log("⚠ api_key table missing — skipping admin token provisioning")
+        return
+
+    # Reuse any existing bootstrap-provisioned key first.
+    cur.execute(
+        "SELECT key FROM api_key WHERE user_id=%s AND id=%s",
+        (user_id, "mws_bootstrap_admin"),
+    )
+    row = cur.fetchone()
+    if row and row[0]:
+        token = row[0]
+        log("✓ reusing existing admin api_key from DB")
+    else:
+        token = "sk-" + secrets.token_hex(32)
+        now_s = int(time.time())
+        cols = get_columns(cur, "api_key")
+        row_data: dict[str, Any] = {
+            "id": "mws_bootstrap_admin",
+            "user_id": user_id,
+            "key": token,
+            "data": Json({"name": "mws-bootstrap-admin"}),
+            "created_at": now_s,
+            "updated_at": now_s,
+        }
+        row_data = {k: v for k, v in row_data.items() if k in cols}
+        col_list = list(row_data.keys())
+        placeholders = ", ".join(["%s"] * len(col_list))
+        col_sql = ", ".join(f'"{c}"' for c in col_list)
+        cur.execute(
+            f'INSERT INTO api_key ({col_sql}) VALUES ({placeholders}) '
+            f'ON CONFLICT (id) DO UPDATE SET "updated_at"=EXCLUDED."updated_at"',
+            [row_data[c] for c in col_list],
+        )
+        log("✓ generated new admin api_key and stored in DB")
+
+    # Publish to shared file (openwebui reads this at pipe call time).
+    try:
+        SECRETS_DIR.mkdir(parents=True, exist_ok=True)
+        token_file = SECRETS_DIR / "owui_admin_token"
+        token_file.write_text(token, encoding="utf-8")
+        try:
+            token_file.chmod(0o600)
+        except Exception:
+            pass
+        log(f"✓ wrote token to {token_file}")
+    except Exception as e:
+        log(f"⚠ could not write {SECRETS_DIR}/owui_admin_token: {e}")
+
+    # Persist to host .env so next `docker compose up` picks it up via env.
+    try:
+        update_host_env("OWUI_ADMIN_TOKEN", token)
+    except Exception as e:
+        log(f"⚠ could not update {HOST_ENV_FILE}: {e}")
+
+
+def update_host_env(key: str, value: str) -> None:
+    """Idempotently set KEY=value in the host .env file. Only overwrites if
+    the current value is empty — never clobbers an operator-provided token."""
+    if not HOST_ENV_FILE.exists():
+        log(f"⚠ {HOST_ENV_FILE} not mounted, skipping .env update")
+        return
+
+    lines = HOST_ENV_FILE.read_text(encoding="utf-8").splitlines()
+    found = False
+    changed = False
+    out: list[str] = []
+    for line in lines:
+        stripped = line.lstrip()
+        if stripped.startswith(f"{key}="):
+            found = True
+            # Extract current value, stripping inline comment.
+            rhs = line.split("=", 1)[1]
+            comment = ""
+            if "#" in rhs:
+                idx = rhs.index("#")
+                comment = "  " + rhs[idx:]
+                rhs = rhs[:idx]
+            current = rhs.strip()
+            if current:
+                out.append(line)  # keep operator value intact
+            else:
+                out.append(f"{key}={value}{comment}")
+                changed = True
+        else:
+            out.append(line)
+
+    if not found:
+        out.append(f"{key}={value}")
+        changed = True
+
+    if changed:
+        HOST_ENV_FILE.write_text("\n".join(out) + "\n", encoding="utf-8")
+        log(f"✓ {HOST_ENV_FILE.name}: set {key}")
+
+
 def main() -> int:
     log(
         f"connecting to postgres://{PGUSER}@{PGHOST}:{PGPORT}/{PGDATABASE}"
@@ -179,6 +290,20 @@ def main() -> int:
         wait_for_table(cur, "function")
         user_id = wait_for_first_user(cur)
         log(f"✓ first user detected: id={user_id}")
+
+        # Mirror compose-resolved Langfuse keys into .env so the file stays
+        # the single source of truth. These are provisioned into langfuse
+        # headlessly via LANGFUSE_INIT_* in compose; here we just publish
+        # the same values to the host .env for operator visibility.
+        for env_key in ("LANGFUSE_PUBLIC_KEY", "LANGFUSE_SECRET_KEY"):
+            val = os.environ.get(env_key, "").strip()
+            if val:
+                try:
+                    update_host_env(env_key, val)
+                except Exception as e:
+                    log(f"⚠ could not update {HOST_ENV_FILE} for {env_key}: {e}")
+
+        ensure_admin_api_token(cur, user_id)
 
         seed_function(
             cur,

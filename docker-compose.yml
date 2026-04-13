@@ -5,7 +5,7 @@ services:
       - "127.0.0.1:5432:5432"  # localhost only — accessible via SSH tunnel
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-mws}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-mws_dev_postgres_pw_change_in_prod}
       POSTGRES_DB: ${POSTGRES_DB:-openwebui}
     volumes:
       - ./data/postgres:/var/lib/postgresql/data
@@ -46,10 +46,10 @@ services:
     # Port not exposed to host — accessible only via mws-network
     environment:
       MWS_GPT_API_KEY: ${MWS_GPT_API_KEY}
-      LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY}
-      LITELLM_DATABASE_URL: postgresql://${POSTGRES_USER:-mws}:${POSTGRES_PASSWORD}@postgres:5432/litellm
-      LANGFUSE_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY:-}
-      LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY:-}
+      LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY:-sk-mws-dev-litellm-master-key-change-in-prod}
+      LITELLM_DATABASE_URL: postgresql://${POSTGRES_USER:-mws}:${POSTGRES_PASSWORD:-mws_dev_postgres_pw_change_in_prod}@postgres:5432/litellm
+      LANGFUSE_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY:-pk-lf-mws-dev-public-key-change-in-prod}
+      LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY:-sk-lf-mws-dev-secret-key-change-in-prod}
       LANGFUSE_HOST: ${LANGFUSE_HOST:-http://langfuse:3000}
     depends_on:
       postgres:
@@ -74,18 +74,18 @@ services:
     ports: ["3000:8080"]
     environment:
       OPENAI_API_BASE_URLS: http://litellm:4000/v1
-      OPENAI_API_KEYS: ${LITELLM_MASTER_KEY}
+      OPENAI_API_KEYS: ${LITELLM_MASTER_KEY:-sk-mws-dev-litellm-master-key-change-in-prod}
       # Exposed so Pipe/Filter functions (e.g. auto_router_function.py) can read
       # the master key via os.getenv("LITELLM_MASTER_KEY") — without this,
       # Pipe calls back to LiteLLM return 401 Unauthorized.
-      LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY}
+      LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY:-sk-mws-dev-litellm-master-key-change-in-prod}
       # Needed for phase-11 pptx delivery: pipe uploads generated .pptx via
       # POST /api/v1/files/ using this token. Without it the presentation
       # subagent falls back to a markdown plan.
       OWUI_ADMIN_TOKEN: ${OWUI_ADMIN_TOKEN:-}
-      WEBUI_SECRET_KEY: ${OPENWEBUI_SECRET_KEY}
+      WEBUI_SECRET_KEY: ${OPENWEBUI_SECRET_KEY:-mws-dev-openwebui-secret-key-change-in-prod}
       WEBUI_NAME: "MWS GPT"
-      DATABASE_URL: postgresql://${POSTGRES_USER:-mws}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-openwebui}
+      DATABASE_URL: postgresql://${POSTGRES_USER:-mws}:${POSTGRES_PASSWORD:-mws_dev_postgres_pw_change_in_prod}@postgres:5432/${POSTGRES_DB:-openwebui}
       ENABLE_SIGNUP: "true"
       ENABLE_LOGIN_FORM: "true"
       WEBUI_AUTH: "true"
@@ -94,7 +94,7 @@ services:
       RAG_EMBEDDING_ENGINE: "openai"
       RAG_EMBEDDING_MODEL: "mws/bge-m3"
       RAG_OPENAI_API_BASE_URL: "http://litellm:4000/v1"
-      RAG_OPENAI_API_KEY: ${LITELLM_MASTER_KEY}
+      RAG_OPENAI_API_KEY: ${LITELLM_MASTER_KEY:-sk-mws-dev-litellm-master-key-change-in-prod}
       CHUNK_SIZE: "1500"
       CHUNK_OVERLAP: "100"
       RAG_TOP_K: "5"
@@ -103,7 +103,7 @@ services:
       RAG_WEB_SEARCH_RESULT_COUNT: "3"
       AUDIO_STT_ENGINE: "openai"
       AUDIO_STT_OPENAI_API_BASE_URL: "http://litellm:4000/v1"
-      AUDIO_STT_OPENAI_API_KEY: ${LITELLM_MASTER_KEY}
+      AUDIO_STT_OPENAI_API_KEY: ${LITELLM_MASTER_KEY:-sk-mws-dev-litellm-master-key-change-in-prod}
       AUDIO_STT_MODEL: "mws/whisper-turbo"
       AUDIO_TTS_ENGINE: "openai"
       AUDIO_TTS_OPENAI_API_BASE_URL: "http://tts-service:8000/v1"
@@ -114,6 +114,7 @@ services:
       - openwebui_data:/app/backend/data
       - ./openwebui/static/custom.css:/app/backend/open_webui/static/custom.css:ro
       - ./openwebui/static/custom.css:/app/build/static/custom.css:ro
+      - ./data/secrets:/owui_secrets:ro
     depends_on:
       litellm:
         condition: service_healthy
@@ -135,9 +136,9 @@ services:
     build: ./memory-service
     # Port not exposed to host — accessible only via mws-network
     environment:
-      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-mws}:${POSTGRES_PASSWORD}@postgres:5432/memory
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-mws}:${POSTGRES_PASSWORD:-mws_dev_postgres_pw_change_in_prod}@postgres:5432/memory
       LITELLM_URL: http://litellm:4000
-      LITELLM_API_KEY: ${LITELLM_MASTER_KEY}
+      LITELLM_API_KEY: ${LITELLM_MASTER_KEY:-sk-mws-dev-litellm-master-key-change-in-prod}
       EMBEDDING_MODEL: mws/bge-m3
       EMBEDDING_DIMENSIONS: "1024"
       EXTRACTION_MODEL: mws/gpt-alpha
@@ -179,7 +180,7 @@ services:
     # Port not exposed to host — accessible only via mws-network
     environment:
       LITELLM_URL: http://litellm:4000
-      LITELLM_API_KEY: ${LITELLM_MASTER_KEY}
+      LITELLM_API_KEY: ${LITELLM_MASTER_KEY:-sk-mws-dev-litellm-master-key-change-in-prod}
       SCHEMA_MODEL: mws/glm-4.6
     depends_on:
       litellm:
@@ -200,12 +201,26 @@ services:
     image: langfuse/langfuse:2
     # Port not exposed to host — accessible only via mws-network
     environment:
-      DATABASE_URL: postgresql://${POSTGRES_USER:-mws}:${POSTGRES_PASSWORD}@postgres:5432/langfuse
+      DATABASE_URL: postgresql://${POSTGRES_USER:-mws}:${POSTGRES_PASSWORD:-mws_dev_postgres_pw_change_in_prod}@postgres:5432/langfuse
       NEXTAUTH_URL: http://localhost:3001
-      NEXTAUTH_SECRET: ${LANGFUSE_NEXTAUTH_SECRET}
-      SALT: ${LANGFUSE_SALT}
+      NEXTAUTH_SECRET: ${LANGFUSE_NEXTAUTH_SECRET:-mws-dev-langfuse-nextauth-secret-change-in-prod}
+      SALT: ${LANGFUSE_SALT:-mws-dev-langfuse-salt-change-in-prod}
       HOSTNAME: "0.0.0.0"
       TELEMETRY_ENABLED: "false"
+      # Headless provisioning: on a fresh langfuse DB these vars make langfuse
+      # create org + project + admin user + API keys automatically. On
+      # subsequent boots with existing data they are ignored. The same public/
+      # secret values are consumed by litellm below, so tracing works on a
+      # bare `docker compose up -d` with zero manual steps.
+      LANGFUSE_INIT_ORG_ID: mws
+      LANGFUSE_INIT_ORG_NAME: MWS
+      LANGFUSE_INIT_PROJECT_ID: mws-gpt
+      LANGFUSE_INIT_PROJECT_NAME: MWS GPT Platform
+      LANGFUSE_INIT_PROJECT_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY:-pk-lf-mws-dev-public-key-change-in-prod}
+      LANGFUSE_INIT_PROJECT_SECRET_KEY: ${LANGFUSE_SECRET_KEY:-sk-lf-mws-dev-secret-key-change-in-prod}
+      LANGFUSE_INIT_USER_EMAIL: admin@mws.local
+      LANGFUSE_INIT_USER_NAME: MWS Admin
+      LANGFUSE_INIT_USER_PASSWORD: ${LANGFUSE_INIT_USER_PASSWORD:-mws-dev-admin-password-change-in-prod}
     depends_on:
       postgres:
         condition: service_healthy
@@ -294,14 +309,22 @@ services:
     environment:
       PGHOST: postgres
       PGUSER: ${POSTGRES_USER:-mws}
-      PGPASSWORD: ${POSTGRES_PASSWORD}
+      PGPASSWORD: ${POSTGRES_PASSWORD:-mws_dev_postgres_pw_change_in_prod}
       PGDATABASE: openwebui
       PIPELINES_DIR: /pipelines
+      # Mirrored into host .env so the file is the single source of truth
+      # for secrets. These come from compose defaults on first boot and from
+      # the operator's .env on subsequent boots — either way bootstrap
+      # writes them through.
+      LANGFUSE_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY:-pk-lf-mws-dev-public-key-change-in-prod}
+      LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY:-sk-lf-mws-dev-secret-key-change-in-prod}
       PIP_DISABLE_PIP_VERSION_CHECK: "1"
       PIP_NO_CACHE_DIR: "1"
     volumes:
       - ./pipelines:/pipelines:ro
       - ./scripts/bootstrap.py:/bootstrap.py:ro
+      - ./data/secrets:/secrets
+      - ./.env:/host/.env
     command: >
       sh -c "pip install --quiet psycopg2-binary==2.9.9 && python -u /bootstrap.py"
     restart: on-failure
