@@ -318,6 +318,79 @@ def enable_api_keys_in_config(cur) -> None:
         log("✓ created config row with api_keys enabled")
 
 
+def make_all_models_public(cur) -> None:
+    """Force access_control=NULL on every row in `model` and `function`.
+
+    OpenWebUI filters the chat model dropdown for non-admin users by each
+    model's access_control column. A row with a non-NULL (even empty)
+    access_control is invisible to role='user' unless they are in the
+    allowlist. BYPASS_MODEL_ACCESS_CONTROL=true in env covers the check
+    at runtime, but we also reset the stored ACLs so the admin-panel UI
+    shows the models as 'Public' and future toggles start from a clean
+    state. Safe for this internal stand — all MWS GPT models should be
+    visible to every signed-in user.
+    """
+    for table in ("model", "function"):
+        if not table_exists(cur, table):
+            continue
+        cols = get_columns(cur, table)
+        if "access_control" not in cols:
+            continue
+        cur.execute(
+            f'UPDATE "{table}" SET access_control = NULL '
+            f'WHERE access_control IS NOT NULL'
+        )
+        if cur.rowcount:
+            log(f"✓ cleared access_control on {cur.rowcount} row(s) in {table}")
+
+
+def enable_signup_in_config(cur) -> None:
+    """Ensure ui.enable_signup=True and ui.default_user_role='user' in config.
+
+    Both are PersistentConfig in OpenWebUI: ENABLE_SIGNUP / DEFAULT_USER_ROLE
+    env vars are read only on first boot, after which config.data.ui.* wins
+    and the admin-panel toggle is the source of truth. We force both values
+    on every bootstrap so:
+      - the signup form is always visible (Register link on /auth),
+      - new signups land as active 'user' role with full model access
+        (including the global MWS GPT Auto 🎯 pipe), not 'pending'.
+    """
+    if not table_exists(cur, "config"):
+        log("⚠ config table missing — cannot enable signup")
+        return
+    cur.execute("SELECT id, data FROM config ORDER BY id DESC LIMIT 1")
+    row = cur.fetchone()
+    import json as _json
+    if row:
+        config_id, data = row
+        if isinstance(data, str):
+            data = _json.loads(data)
+        data = data or {}
+        ui = data.get("ui") or {}
+        already_ok = (
+            ui.get("enable_signup") is True
+            and ui.get("default_user_role") == "user"
+        )
+        if already_ok:
+            log("✓ signup already enabled and default_user_role='user' in config")
+            return
+        ui["enable_signup"] = True
+        ui["default_user_role"] = "user"
+        data["ui"] = ui
+        cur.execute("UPDATE config SET data=%s WHERE id=%s", (Json(data), config_id))
+        log("✓ enabled ui.enable_signup + set ui.default_user_role='user' in config")
+    else:
+        data = {
+            "version": 0,
+            "ui": {"enable_signup": True, "default_user_role": "user"},
+        }
+        cur.execute(
+            "INSERT INTO config (data, version, created_at) VALUES (%s, 0, now())",
+            (Json(data),),
+        )
+        log("✓ created config row with signup enabled and default role 'user'")
+
+
 def main() -> int:
     log(
         f"connecting to postgres://{PGUSER}@{PGHOST}:{PGPORT}/{PGDATABASE}"
@@ -328,6 +401,8 @@ def main() -> int:
         wait_for_table(cur, "user")
         wait_for_table(cur, "function")
         enable_api_keys_in_config(cur)
+        enable_signup_in_config(cur)
+        make_all_models_public(cur)
         user_id = wait_for_first_user(cur)
         log(f"✓ first user detected: id={user_id}")
 
