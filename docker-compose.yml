@@ -88,6 +88,12 @@ services:
       DATABASE_URL: postgresql://${POSTGRES_USER:-mws}:${POSTGRES_PASSWORD:-mws_dev_postgres_pw_change_in_prod}@postgres:5432/${POSTGRES_DB:-openwebui}
       ENABLE_SIGNUP: "true"
       ENABLE_LOGIN_FORM: "true"
+      DEFAULT_USER_ROLE: "user"
+      # Non-admin users must see every model in the chat dropdown (LiteLLM
+      # upstream + pipe virtual models like "MWS GPT Auto 🎯"). Without this
+      # flag OpenWebUI filters the dropdown by per-model access_control, and
+      # previously seeded/admin-restricted rows become invisible to role=user.
+      BYPASS_MODEL_ACCESS_CONTROL: "true"
       # Required for the bootstrap-provisioned admin api_key (sk-…) to work
       # against /api/v1/files/ (used by _sa_presentation for pptx upload).
       # Without this, API-key bearer auth is rejected and pptx falls back to
